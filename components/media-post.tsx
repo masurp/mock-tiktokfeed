@@ -69,13 +69,13 @@ export default function MediaPost({ mediaUrl, mediaType, username, caption, isAc
   }
 
   return (
-    <div className="absolute inset-0 bg-black">
+    <div className="relative h-full w-full bg-black">
       {mediaType === "video" ? (
         <>
           <video
             ref={videoRef}
             src={mediaUrl}
-            className="absolute inset-0 w-full h-full object-cover"
+            className="h-full w-full object-cover"
             loop
             muted
             playsInline
@@ -91,7 +91,7 @@ export default function MediaPost({ mediaUrl, mediaType, username, caption, isAc
           )}
         </>
       ) : (
-        <div className="absolute inset-0">
+        <div className="h-full w-full relative">
           <Image
             src={mediaUrl || "/placeholder.svg"}
             alt={caption}
@@ -129,6 +129,12 @@ export default function MediaPost({ mediaUrl, mediaType, username, caption, isAc
 
       {/* Media overlay gradient */}
       <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/70" />
+
+      {/* User info and caption - moved closer to the bottom */}
+      <div className="absolute bottom-6 left-6 right-16 z-10">
+        <div className="text-white font-bold text-lg drop-shadow-md">{username}</div>
+        <p className="text-white text-sm mt-1 drop-shadow-md">{caption}</p>
+      </div>
     </div>
   )
 }

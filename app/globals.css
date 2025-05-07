@@ -5,82 +5,26 @@
 :root {
   --foreground-rgb: 255, 255, 255;
   --background-rgb: 0, 0, 0;
-
-  /* Default fallback for browsers that don't support dynamic viewport units */
-  --app-height: 100vh;
+  --app-height: 100vh; /* Default, will be updated by JavaScript */
 }
 
-/* Update the full-screen class to ensure it fills the entire viewport */
-.full-screen {
-  height: 100vh; /* Default fallback */
-  height: var(--app-height); /* JavaScript fallback */
-  /* Modern viewport units with fallbacks */
-  height: 100dvh; /* Dynamic viewport height - adjusts when browser UI appears/disappears */
-  height: 100svh; /* Small viewport height - accounts for collapsed browser UI */
-}
-
-/* Add a class specifically for the feed container */
-.feed-container {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 100vh; /* Default fallback */
-  height: var(--app-height);
-  height: 100dvh;
-  width: 100%;
-  overflow: hidden;
-}
-
-/* Ensure content fills the entire container */
-.feed-content {
-  height: 100%;
-  width: 100%;
-}
-
-/* Update body styles to ensure full height */
 body {
   color: rgb(var(--foreground-rgb));
   background: rgb(var(--background-rgb));
   overscroll-behavior: none;
-  /* Prevent pull-to-refresh and overscrolling */
-  touch-action: pan-x pan-y;
-  -webkit-overflow-scrolling: touch;
-  /* Ensure content is properly sized on iOS */
-  height: 100%;
-  margin: 0;
-  padding: 0;
-}
-
-html {
-  height: 100%;
-  overflow: hidden;
 }
 
 html,
 body {
+  height: 100%;
+  height: var(--app-height);
   overflow: hidden;
-  /* Prevent browser UI from changing size on scroll */
-  position: fixed;
-  width: 100%;
 }
 
-/* Safe area utilities for mobile devices */
-.pb-safe {
-  padding-bottom: env(safe-area-inset-bottom, 1.5rem);
-}
-
-.pt-safe {
-  padding-top: env(safe-area-inset-top, 1rem);
-}
-
-/* Bottom spacing to ensure content isn't hidden under mobile browser UI */
-.mobile-bottom-safe {
-  /* Default bottom margin for older browsers */
-  margin-bottom: 5rem;
-  /* Use safe area inset if available */
-  margin-bottom: calc(env(safe-area-inset-bottom, 0) + 5rem);
+/* Utility class for full viewport height that works on mobile */
+.mobile-full-height {
+  height: 100%;
+  height: var(--app-height);
 }
 
 @layer utilities {
