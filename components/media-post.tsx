@@ -19,44 +19,177 @@ export default function MediaPost({ mediaUrl, mediaType, username, caption, isAc
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isMuted, setIsMuted] = useState(false)
+  // Add a ref to track the play promise
+  const playPromiseRef = useRef<Promise<void> | null>(null)
+  // Track if user has interacted with the page
+  const [userInteracted, setUserInteracted] = useState(false)
+  // Track retry attempts
+  const [retryCount, setRetryCount] = useState(0)
+  const maxRetries = 3
 
+  // Listen for any user interaction with the page
+  useEffect(() => {
+    const handleUserInteraction = () => {
+      setUserInteracted(true)
+      // Remove listeners after first interaction
+      document.removeEventListener("click", handleUserInteraction)
+      document.removeEventListener("touchstart", handleUserInteraction)
+      document.removeEventListener("keydown", handleUserInteraction)
+    }
+
+    document.addEventListener("click", handleUserInteraction)
+    document.addEventListener("touchstart", handleUserInteraction)
+    document.addEventListener("keydown", handleUserInteraction)
+
+    return () => {
+      document.removeEventListener("click", handleUserInteraction)
+      document.removeEventListener("touchstart", handleUserInteraction)
+      document.removeEventListener("keydown", handleUserInteraction)
+    }
+  }, [])
+
+  // Function to safely play video with retries and fallbacks
+  const playVideo = async () => {
+    if (!videoRef.current) return Promise.reject(new Error("No video element"))
+
+    try {
+      setIsLoading(true)
+      setError(null)
+
+      // First, ensure video is visible in the viewport
+      if (isActive) {
+        // Force low-level play attempt with timeout
+        const playAttempt = new Promise<void>((resolve, reject) => {
+          // Set a timeout in case play hangs
+          const timeoutId = setTimeout(() => {
+            reject(new Error("Play attempt timed out"))
+          }, 2000)
+
+          // Attempt to play
+          playPromiseRef.current = videoRef.current.play()
+          playPromiseRef.current
+            .then(() => {
+              clearTimeout(timeoutId)
+              resolve()
+            })
+            .catch((err) => {
+              clearTimeout(timeoutId)
+              reject(err)
+            })
+        })
+
+        await playAttempt
+        setIsLoading(false)
+        setRetryCount(0) // Reset retry count on success
+        playPromiseRef.current = null
+        return Promise.resolve()
+      }
+
+      return Promise.reject(new Error("Video not active"))
+    } catch (error) {
+      console.error("Video play failed:", error)
+      playPromiseRef.current = null
+
+      // If we've tried less than max retries, try again with a delay
+      if (retryCount < maxRetries) {
+        setRetryCount((prev) => prev + 1)
+
+        // Exponential backoff for retries
+        const retryDelay = 300 * Math.pow(2, retryCount)
+
+        return new Promise((resolve, reject) => {
+          setTimeout(() => {
+            if (videoRef.current && isActive) {
+              // Force mute for retry (better autoplay success rate)
+              videoRef.current.muted = true
+
+              // Try a different approach on later retries
+              if (retryCount >= 2 && videoRef.current) {
+                // Reset the video element completely
+                videoRef.current.load()
+                // Small delay after load
+                setTimeout(() => {
+                  if (videoRef.current) {
+                    videoRef.current.play().then(resolve).catch(reject)
+                  } else {
+                    reject(new Error("Video element not available"))
+                  }
+                }, 100)
+              } else {
+                // Standard retry
+                videoRef.current.play().then(resolve).catch(reject)
+              }
+            } else {
+              reject(new Error("Video not active or not available"))
+            }
+          }, retryDelay)
+        })
+      } else {
+        // If we've exceeded max retries, show error
+        setError("Failed to play video. Tap to try again.")
+        setIsLoading(false)
+        return Promise.reject(error)
+      }
+    }
+  }
+
+  // Function to safely pause video
+  const pauseVideo = async () => {
+    if (!videoRef.current) return
+
+    // Wait for any pending play operation to complete before pausing
+    if (playPromiseRef.current) {
+      try {
+        await playPromiseRef.current
+      } catch (e) {
+        // Ignore errors from the play promise
+      }
+      playPromiseRef.current = null
+    }
+
+    // Now it's safe to pause
+    videoRef.current.pause()
+    videoRef.current.currentTime = 0
+  }
+
+  // Handle video playback when active state changes
   useEffect(() => {
     if (mediaType === "video" && videoRef.current) {
       if (isActive) {
-        setIsLoading(true)
-        // Use a small timeout to ensure the video plays after it's visible
-        const playPromise = videoRef.current.play()
+        // Delay play attempt slightly to ensure DOM is ready
+        const playTimer = setTimeout(() => {
+          if (videoRef.current) {
+            // Force muted state for initial play attempt (mobile browsers require this)
+            const originalMuted = videoRef.current.muted
+            videoRef.current.muted = true
 
-        if (playPromise !== undefined) {
-          playPromise
-            .then(() => {
-              setIsLoading(false)
-            })
-            .catch((error) => {
-              console.error("Video play failed:", error)
-              setError("Failed to play video. Tap to try again.")
-              // Try again with user interaction simulation
-              document.addEventListener(
-                "click",
-                function playVideo() {
-                  if (videoRef.current) {
-                    videoRef.current
-                      .play()
-                      .then(() => setIsLoading(false))
-                      .catch(() => setError("Could not play video."))
-                  }
-                  document.removeEventListener("click", playVideo)
-                },
-                { once: true },
-              )
-            })
-        }
+            // Attempt to play
+            playVideo()
+              .then(() => {
+                // If user has interacted and video wasn't supposed to be muted, unmute it
+                if (userInteracted && !isMuted && videoRef.current) {
+                  videoRef.current.muted = originalMuted
+                }
+              })
+              .catch((error) => {
+                console.error("Initial play failed:", error)
+              })
+          }
+        }, 100)
+
+        return () => clearTimeout(playTimer)
       } else {
-        videoRef.current.pause()
-        videoRef.current.currentTime = 0
+        pauseVideo()
       }
     }
-  }, [isActive, mediaType])
+  }, [isActive, mediaType, userInteracted, isMuted])
+
+  // Preload videos for smoother experience
+  useEffect(() => {
+    if (mediaType === "video" && videoRef.current) {
+      videoRef.current.load()
+    }
+  }, [mediaUrl, mediaType])
 
   const handleVideoLoad = () => {
     setIsLoading(false)
@@ -77,13 +210,58 @@ export default function MediaPost({ mediaUrl, mediaType, username, caption, isAc
 
     // If we're unmuting and the video is active, ensure it's playing
     if (isMuted && isActive && videoRef.current) {
-      videoRef.current.play().catch((err) => {
-        console.error("Could not play video with sound:", err)
-        // If autoplay with sound fails, keep it muted
-        setIsMuted(true)
-      })
+      // Don't try to play if there's already a play promise pending
+      if (!playPromiseRef.current) {
+        videoRef.current.muted = false
+        videoRef.current.play().catch((err) => {
+          console.error("Could not play video with sound:", err)
+          // If autoplay with sound fails, keep it muted
+          videoRef.current!.muted = true
+        })
+      } else {
+        // If there's a pending play promise, just update the muted state
+        videoRef.current.muted = false
+      }
+    } else if (videoRef.current) {
+      videoRef.current.muted = true
     }
   }
+
+  const handleRetry = () => {
+    setUserInteracted(true) // Mark that user has interacted
+    setRetryCount(0) // Reset retry count
+    setError(null)
+    if (videoRef.current && !playPromiseRef.current) {
+      playVideo()
+    }
+  }
+
+  // Add this after the other useEffect hooks
+  useEffect(() => {
+    if (mediaType === "video" && videoRef.current && isActive) {
+      // Create an intersection observer to detect when the video is visible
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting && videoRef.current && isActive) {
+              // Video is visible in viewport, try to play it
+              playVideo().catch((err) => console.error("Visibility play failed:", err))
+              // Stop observing once we've detected visibility
+              observer.disconnect()
+            }
+          })
+        },
+        { threshold: 0.1 }, // Trigger when at least 10% of the video is visible
+      )
+
+      // Start observing the video element
+      observer.observe(videoRef.current)
+
+      return () => {
+        observer.disconnect()
+      }
+    }
+  }, [isActive, mediaType])
 
   return (
     <div className="relative h-full w-full bg-black">
@@ -96,10 +274,17 @@ export default function MediaPost({ mediaUrl, mediaType, username, caption, isAc
             loop
             muted={isMuted}
             playsInline
-            autoPlay={isActive}
             preload="auto"
             onLoadedData={handleVideoLoad}
             onError={handleError}
+            // Add poster for better perceived performance
+            poster={mediaUrl + "?poster=true"}
+            onTouchStart={() => {
+              setUserInteracted(true)
+              if (isActive && videoRef.current && !playPromiseRef.current) {
+                playVideo().catch((err) => console.error("Touch play failed:", err))
+              }
+            }}
           />
           {isLoading && isActive && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/50">
@@ -131,17 +316,20 @@ export default function MediaPost({ mediaUrl, mediaType, username, caption, isAc
         <div className="absolute inset-0 flex items-center justify-center bg-black/70">
           <div className="text-center p-4">
             <p className="text-white text-lg mb-2">{error}</p>
-            <button
-              className="bg-primary text-white px-4 py-2 rounded-full"
-              onClick={() => {
-                setError(null)
-                if (videoRef.current) videoRef.current.play()
-              }}
-            >
+            <button className="bg-primary text-white px-4 py-2 rounded-full" onClick={handleRetry}>
               Try Again
             </button>
           </div>
         </div>
+      )}
+
+      {/* Invisible overlay to capture first interaction */}
+      {!userInteracted && (
+        <div
+          className="absolute inset-0 z-40 cursor-pointer"
+          onClick={() => setUserInteracted(true)}
+          aria-hidden="true"
+        />
       )}
 
       {/* Media overlay gradient */}
