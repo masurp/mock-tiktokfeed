@@ -16,7 +16,7 @@ export async function POST(request: Request) {
     }
 
     // Log events to console for development
-    console.log("Tracking events received:", events.length)
+    console.log("Tracking events received:", events)
 
     // Check if Google Script URL is configured
     const GOOGLE_SCRIPT_URL = process.env.GOOGLE_SCRIPT_URL
@@ -31,32 +31,26 @@ export async function POST(request: Request) {
       })
     }
 
-    // If Google Script URL is configured, try to send events to Google Sheets
+    // If Google Script URL is configured, send events to Google Sheets
     try {
-      // Add timeout to the fetch request
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
-
       const response = await fetch(GOOGLE_SCRIPT_URL, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ events }),
-        signal: controller.signal,
       })
-
-      clearTimeout(timeoutId) // Clear the timeout
 
       if (!response.ok) {
         const errorText = await response.text()
-        console.error(`Error from Google Script (${response.status}):`, errorText)
-
-        // Still return success to the client, but log the error
-        return NextResponse.json({
-          success: true,
-          message: `Processed ${events.length} events (Google Sheets export failed but events were logged)`,
-        })
+        console.error("Error from Google Script:", errorText)
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Failed to send events to Google Sheets",
+          },
+          { status: 500 },
+        )
       }
 
       return NextResponse.json({
@@ -65,8 +59,6 @@ export async function POST(request: Request) {
       })
     } catch (fetchError) {
       console.error("Error sending events to Google Sheets:", fetchError)
-
-      // Still return success to the client, but log the error
       return NextResponse.json({
         success: true,
         message: `Processed ${events.length} events (Google Sheets export failed but events were logged)`,
