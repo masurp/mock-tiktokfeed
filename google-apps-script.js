@@ -23,7 +23,7 @@ function doPost(e) {
 
     if (!sheet) {
       // Create the export sheet if it doesn't exist
-      const newSheet = spreadsheet.insertSheet("export")
+      const newSheet = spreadsheet.insertSheet("export2")
       newSheet.appendRow(["event", "userId", "postId", "postOwner", "timestamp", "duration", "value", "processedAt"])
       const sheet = newSheet
     }

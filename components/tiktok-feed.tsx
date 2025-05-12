@@ -16,6 +16,7 @@ import { useSwipeable } from "react-swipeable"
 import MediaPost from "./media-post"
 import EndCard from "./end-card"
 import HeartAnimation from "./heart-animation"
+import VisualWarningLogoImage from "./visual-warning-logo-image"
 import { useMobile } from "@/hooks/use-mobile"
 import { useViewportHeight } from "@/hooks/use-viewport-height"
 import { initTracking, trackEvent, startViewTracking } from "@/utils/tracking"
@@ -28,7 +29,7 @@ interface Post {
   username: string
   caption: string
   condition?: string
-  filter?: string // "yes" or "no" for beauty filter
+  filter?: string // Text describing the filter or effect applied
   likes?: number
   comments?: number
   saves?: number
@@ -36,6 +37,9 @@ interface Post {
 }
 
 export default function TikTokFeed() {
+  // Initialize the viewport height hook to set the CSS variable
+  useViewportHeight()
+
   const [allPosts, setAllPosts] = useState<Post[]>([])
   const [filteredPosts, setFilteredPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
@@ -51,54 +55,16 @@ export default function TikTokFeed() {
   const [userId, setUserId] = useState<string>("unknown")
   const containerRef = useRef<HTMLDivElement>(null)
   const isMobile = useMobile()
-  // Add sound initialization on first user interaction to handle autoplay restrictions
-  const [soundInitialized, setSoundInitialized] = useState(false)
-  // Add state to track if tracking is initialized
-  const [trackingInitialized, setTrackingInitialized] = useState(false)
-  // Track if user has interacted with the page
-  const [userInteracted, setUserInteracted] = useState(false)
-  // Global muted state to persist across videos
-  const [globalMuted, setGlobalMuted] = useState(true)
-
-  // Use our custom hook to handle viewport height
-  const { getViewportHeightPercentage } = useViewportHeight()
 
   // Ref to store the cleanup function for view tracking
   const viewTrackingCleanupRef = useRef<(() => void) | null>(null)
 
+  // First, add a state variable to track the condition number
+  const [conditionNumber, setConditionNumber] = useState<string>("")
+
   // Initialize tracking system
   useEffect(() => {
-    try {
-      if (!trackingInitialized) {
-        initTracking()
-        setTrackingInitialized(true)
-        console.log("Tracking system initialized successfully")
-      }
-    } catch (error) {
-      console.error("Failed to initialize tracking system:", error)
-    }
-  }, [trackingInitialized])
-
-  // Listen for any user interaction with the page
-  useEffect(() => {
-    const handleUserInteraction = () => {
-      setUserInteracted(true)
-      setSoundInitialized(true)
-      // Remove listeners after first interaction
-      document.removeEventListener("click", handleUserInteraction)
-      document.removeEventListener("touchstart", handleUserInteraction)
-      document.removeEventListener("keydown", handleUserInteraction)
-    }
-
-    document.addEventListener("click", handleUserInteraction)
-    document.addEventListener("touchstart", handleUserInteraction)
-    document.addEventListener("keydown", handleUserInteraction)
-
-    return () => {
-      document.removeEventListener("click", handleUserInteraction)
-      document.removeEventListener("touchstart", handleUserInteraction)
-      document.removeEventListener("keydown", handleUserInteraction)
-    }
+    initTracking()
   }, [])
 
   // Fisher-Yates shuffle algorithm for randomizing array order
@@ -118,7 +84,7 @@ export default function TikTokFeed() {
         setLoading(true)
         // Convert Google Sheet to CSV export URL
         const sheetId = "1B0435uEbQa0LENR__kj_oE5aSwty6QDAxiCE7TI5Eoc"
-        const sheetUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=posts`
+        const sheetUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?tqx=out:csv&sheet=posts2`
 
         const response = await fetch(sheetUrl)
         if (!response.ok) {
@@ -160,6 +126,9 @@ export default function TikTokFeed() {
       console.log(`Condition number: ${conditionNumber}, letter: ${conditionLetter}`)
       console.log(`User ID: ${idParam}`)
 
+      // Add this line after the console.log statements:
+      setConditionNumber(conditionNumber)
+
       // Filter posts by condition number
       const postsForCondition = posts.filter((post) => post.condition === conditionNumber)
 
@@ -180,18 +149,13 @@ export default function TikTokFeed() {
       setIsSaved(Array(randomizedPosts.length).fill(false))
 
       // Track app_open event
-      try {
-        trackEvent({
-          event: "app_open",
-          userId: idParam,
-          postId: 0,
-          postOwner: "",
-          timestamp: Date.now(),
-          value: { condition: condParam },
-        })
-      } catch (error) {
-        console.error("Failed to track app_open event:", error)
-      }
+      trackEvent({
+        event: "app_open",
+        userId: idParam,
+        postId: 0,
+        postOwner: "",
+        timestamp: Date.now(),
+      })
     }
   }
 
@@ -237,10 +201,10 @@ export default function TikTokFeed() {
           condition: cleanValues[headers.indexOf("condition")],
           filter: cleanValues[headers.indexOf("filter")], // "yes" or "no"
           // Generate random engagement numbers if not provided
-          likes: Math.floor(Math.random() * 1000) + 500,
-          comments: Math.floor(Math.random() * 400) + 50,
-          saves: Math.floor(Math.random() * 50) + 10,
-          shares: Math.floor(Math.random() * 60) + 10,
+          likes: Math.floor(Math.random() * 30) + 10,
+          comments: Math.floor(Math.random() * 3) + 2,
+          saves: Math.floor(Math.random() * 2) + 1,
+          shares: Math.floor(Math.random() * 2) + 1,
         }
 
         return post
@@ -261,18 +225,13 @@ export default function TikTokFeed() {
       }
 
       // Track feed completion event
-      try {
-        trackEvent({
-          event: "feed_completed",
-          userId,
-          postId: 0,
-          postOwner: "",
-          timestamp: Date.now(),
-          value: { condition: conditionValue },
-        })
-      } catch (error) {
-        console.error("Failed to track feed_completed event:", error)
-      }
+      trackEvent({
+        event: "feed_completed",
+        userId,
+        postId: 0,
+        postOwner: "",
+        timestamp: Date.now(),
+      })
 
       // Move to the end card
       setCurrentIndex(currentIndex + 1)
@@ -302,27 +261,20 @@ export default function TikTokFeed() {
   }
 
   const handleLike = (index: number) => {
-    setUserInteracted(true) // Mark that user has interacted
-
     const newLiked = [...isLiked]
     const wasLiked = newLiked[index]
     newLiked[index] = !wasLiked
     setIsLiked(newLiked)
 
     // Track like/unlike event
-    try {
-      const post = filteredPosts[index]
-      trackEvent({
-        event: wasLiked ? "unlike_post" : "like_post",
-        userId,
-        postId: post.id,
-        postOwner: post.username,
-        timestamp: Date.now(),
-        value: { condition: conditionValue },
-      })
-    } catch (error) {
-      console.error("Failed to track like/unlike event:", error)
-    }
+    const post = filteredPosts[index]
+    trackEvent({
+      event: wasLiked ? "unlike_post" : "like_post",
+      userId,
+      postId: post.id,
+      postOwner: post.username,
+      timestamp: Date.now(),
+    })
 
     // Only show heart animation when liking (not unliking)
     if (!wasLiked) {
@@ -334,46 +286,32 @@ export default function TikTokFeed() {
   }
 
   const handleSave = (index: number) => {
-    setUserInteracted(true) // Mark that user has interacted
-
     const newSaved = [...isSaved]
     const wasSaved = newSaved[index]
     newSaved[index] = !wasSaved
     setIsSaved(newSaved)
 
     // Track save/unsave event
-    try {
-      const post = filteredPosts[index]
-      trackEvent({
-        event: wasSaved ? "unsave_post" : "save_post",
-        userId,
-        postId: post.id,
-        postOwner: post.username,
-        timestamp: Date.now(),
-        value: { condition: conditionValue },
-      })
-    } catch (error) {
-      console.error("Failed to track save/unsave event:", error)
-    }
+    const post = filteredPosts[index]
+    trackEvent({
+      event: wasSaved ? "unsave_post" : "save_post",
+      userId,
+      postId: post.id,
+      postOwner: post.username,
+      timestamp: Date.now(),
+    })
   }
 
   const handleShare = (index: number) => {
-    setUserInteracted(true) // Mark that user has interacted
-
     // Track share event
-    try {
-      const post = filteredPosts[index]
-      trackEvent({
-        event: "share_post",
-        userId,
-        postId: post.id,
-        postOwner: post.username,
-        timestamp: Date.now(),
-        value: { condition: conditionValue },
-      })
-    } catch (error) {
-      console.error("Failed to track share event:", error)
-    }
+    const post = filteredPosts[index]
+    trackEvent({
+      event: "share_post",
+      userId,
+      postId: post.id,
+      postOwner: post.username,
+      timestamp: Date.now(),
+    })
   }
 
   // Start tracking view duration when current post changes
@@ -385,60 +323,27 @@ export default function TikTokFeed() {
       // End previous tracking if exists
       if (viewTrackingCleanupRef.current) {
         viewTrackingCleanupRef.current()
-        viewTrackingCleanupRef.current = null
       }
 
       // Start new tracking
-      try {
-        viewTrackingCleanupRef.current = startViewTracking(userId, post.id, post.username)
-      } catch (error) {
-        console.error("Failed to start view tracking:", error)
-        viewTrackingCleanupRef.current = null
-      }
+      viewTrackingCleanupRef.current = startViewTracking(userId, post.id, post.username)
     }
 
     // Clean up on unmount
     return () => {
       if (viewTrackingCleanupRef.current) {
-        try {
-          viewTrackingCleanupRef.current()
-        } catch (error) {
-          console.error("Error during view tracking cleanup:", error)
-        }
-        viewTrackingCleanupRef.current = null
+        viewTrackingCleanupRef.current()
       }
     }
   }, [currentIndex, filteredPosts, userId])
 
-  // Add this after the other useEffect hooks
-  useEffect(() => {
-    // When current index changes, ensure the video plays after a short delay
-    if (filteredPosts.length > 0 && currentIndex >= 0 && currentIndex < filteredPosts.length) {
-      // Small delay to ensure the DOM has updated
-      const timer = setTimeout(() => {
-        // Force a resize event to help mobile browsers recalculate dimensions
-        window.dispatchEvent(new Event("resize"))
-
-        // Force a scroll event to help trigger visibility detection
-        window.dispatchEvent(new Event("scroll"))
-
-        // Mark user as interacted to help with autoplay
-        setUserInteracted(true)
-      }, 150)
-
-      return () => clearTimeout(timer)
-    }
-  }, [currentIndex, filteredPosts.length])
-
   // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      setUserInteracted(true) // Mark that user has interacted
-
       if (e.key === "ArrowUp") {
-        setTimeout(() => goToPrevious(), 50)
+        goToPrevious()
       } else if (e.key === "ArrowDown") {
-        setTimeout(() => goToNext(), 50)
+        goToNext()
       }
     }
 
@@ -448,30 +353,10 @@ export default function TikTokFeed() {
     }
   }, [currentIndex, filteredPosts.length])
 
-  // Update the swipe handlers
+  // Swipe handlers
   const swipeHandlers = useSwipeable({
-    onSwipedUp: () => {
-      setUserInteracted(true) // Mark that user has interacted
-      // Add a small delay to prevent rapid transitions
-      setTimeout(() => {
-        goToNext()
-        // Force a scroll event after navigation
-        setTimeout(() => {
-          window.dispatchEvent(new Event("scroll"))
-        }, 100)
-      }, 50)
-    },
-    onSwipedDown: () => {
-      setUserInteracted(true) // Mark that user has interacted
-      // Add a small delay to prevent rapid transitions
-      setTimeout(() => {
-        goToPrevious()
-        // Force a scroll event after navigation
-        setTimeout(() => {
-          window.dispatchEvent(new Event("scroll"))
-        }, 100)
-      }, 50)
-    },
+    onSwipedUp: () => goToNext(),
+    onSwipedDown: () => goToPrevious(),
     preventDefaultTouchmoveEvent: true,
     trackMouse: true,
   })
@@ -479,7 +364,7 @@ export default function TikTokFeed() {
   // Show loading state
   if (loading) {
     return (
-      <div className="flex items-center justify-center mobile-full-height w-full bg-black">
+      <div className="flex items-center justify-center full-screen w-full bg-black">
         <div className="flex flex-col items-center">
           <Loader2 className="h-12 w-12 text-primary animate-spin" />
           <p className="mt-4 text-white">Loading videos...</p>
@@ -491,7 +376,7 @@ export default function TikTokFeed() {
   // Show error state
   if (error) {
     return (
-      <div className="flex items-center justify-center mobile-full-height w-full bg-black">
+      <div className="flex items-center justify-center full-screen w-full bg-black">
         <div className="bg-red-900/50 p-6 rounded-lg max-w-md">
           <h2 className="text-xl font-bold text-white mb-2">Error Loading Videos</h2>
           <p className="text-white">{error}</p>
@@ -504,7 +389,7 @@ export default function TikTokFeed() {
   // Show empty state
   if (filteredPosts.length === 0) {
     return (
-      <div className="flex items-center justify-center mobile-full-height w-full bg-black">
+      <div className="flex items-center justify-center full-screen w-full bg-black">
         <div className="bg-gray-900/50 p-6 rounded-lg max-w-md">
           <h2 className="text-xl font-bold text-white mb-2">No Videos Found</h2>
           <p className="text-white">There are no videos available for condition "{conditionValue}".</p>
@@ -517,57 +402,30 @@ export default function TikTokFeed() {
   // Check if we're showing the end card
   const isShowingEndCard = currentIndex === filteredPosts.length
 
-  // Calculate height styles based on device
-  const mobileHeightStyle = "mobile-full-height" // Uses CSS variable for mobile
-  const desktopHeightStyle = isMobile ? "mobile-full-height" : "h-[80vh]"
-
-  // Calculate width for desktop based on aspect ratio
-  const desktopWidthStyle = isMobile ? "w-full" : "w-[calc(80vh*9/16)]"
-
   return (
     <div
-      className={`relative ${isMobile ? mobileHeightStyle : desktopHeightStyle} ${desktopWidthStyle} mx-auto overflow-hidden bg-black`}
+      className="feed-container md:static md:h-[80vh] md:w-[calc(80vh*9/16)] md:mx-auto md:my-auto md:flex md:items-center md:justify-center bg-black"
       ref={containerRef}
-      style={{
-        // Fallback inline style for browsers that don't support CSS variables
-        height: isMobile ? "var(--app-height)" : "80vh",
-      }}
-      onClick={() => {
-        setUserInteracted(true)
-        // Force a scroll event to help trigger visibility detection
-        window.dispatchEvent(new Event("scroll"))
-      }}
     >
       {/* Header with search icon only - hide on end card */}
       {!isShowingEndCard && (
-        <div className="absolute top-16 right-6 z-10">
-          <button
-            className="text-white p-2 bg-black/60 backdrop-blur-sm rounded-full"
-            onClick={() => setUserInteracted(true)}
-          >
-            <Search size={20} />
+        <div className="absolute top-0 right-0 z-10 p-6 pt-safe">
+          <button className="text-white p-2">
+            <Search size={24} />
           </button>
         </div>
       )}
 
       {/* Navigation arrows for desktop - adjust for end card */}
       <button
-        onClick={() => {
-          setUserInteracted(true)
-          // Add a small delay to prevent rapid transitions
-          setTimeout(() => goToPrevious(), 50)
-        }}
+        onClick={goToPrevious}
         className="absolute top-1/2 left-6 z-10 transform -translate-y-1/2 text-white bg-black/30 p-2 rounded-full hidden md:block"
         disabled={currentIndex === 0}
       >
         <ChevronUp size={24} />
       </button>
       <button
-        onClick={() => {
-          setUserInteracted(true)
-          // Add a small delay to prevent rapid transitions
-          setTimeout(() => goToNext(), 50)
-        }}
+        onClick={goToNext}
         className="absolute top-1/2 right-6 z-10 transform -translate-y-1/2 text-white bg-black/30 p-2 rounded-full hidden md:block"
         disabled={isShowingEndCard}
       >
@@ -577,7 +435,7 @@ export default function TikTokFeed() {
       {/* Video container with swipe handlers */}
       <div
         {...swipeHandlers}
-        className="h-full w-full"
+        className="feed-content"
         style={{
           transform: `translateY(-${currentIndex * 100}%)`,
           transition: "transform 0.3s ease-in-out",
@@ -585,66 +443,93 @@ export default function TikTokFeed() {
       >
         {/* Regular posts */}
         {filteredPosts.map((post, index) => (
-          <div
-            key={post.id}
-            className="h-full w-full flex-shrink-0 relative"
-            onClick={() => setUserInteracted(true)} // Mark user interaction on post click
-          >
+          <div key={post.id} className="h-full w-full flex-shrink-0 relative">
             <MediaPost
               mediaUrl={post.mediaUrl}
               mediaType={post.mediaType}
               username={post.username}
               caption={post.caption}
               isActive={index === currentIndex}
-              isMuted={globalMuted}
-              onMuteChange={setGlobalMuted}
-              userInteracted={userInteracted}
             />
 
             {/* Heart animation when liking a video */}
             {animatingHeartForVideo === index && <HeartAnimation />}
 
-            {/* Beauty Filter Label - moved above username with more space */}
-            {showBeautyFilterLabels && post.filter === "yes" && (
-              <div className="absolute bottom-[6.5rem] left-6 z-20 bg-black/60 backdrop-blur-sm px-3 py-1.5 rounded-full flex items-center">
-                <Sparkles size={16} className="text-yellow-400 mr-1.5" />
-                <span className="text-white text-sm font-medium">Beauty Filter Used</span>
+            {/* Content container with safe areas */}
+            <div className="absolute inset-0 flex flex-col pt-safe">
+              {/* Progress indicator at top */}
+              <div className="px-4 pt-6 flex justify-center gap-1 z-10">
+                {filteredPosts.map((_, idx) => (
+                  <div
+                    key={idx}
+                    className={`h-1 rounded-full ${idx === currentIndex ? "bg-white w-6" : "bg-white/30 w-4"}`}
+                  />
+                ))}
               </div>
-            )}
 
-            {/* Interaction buttons - moved closer to the bottom */}
-            <div className="absolute z-30 flex flex-col right-6 bottom-6 gap-5">
-              <button className="flex flex-col items-center" onClick={() => handleLike(index)} aria-label="Like">
-                <Heart
-                  size={28}
-                  strokeWidth={2.5}
-                  className={`${isLiked[index] ? "text-red-500 fill-red-500" : "text-white"} drop-shadow-md`}
-                />
-                <span className="text-white text-xs font-medium mt-1 drop-shadow-md">
-                  {isLiked[index] ? (post.likes || 0) + 1 : post.likes}
-                </span>
-              </button>
+              {/* Spacer to push content to bottom */}
+              <div className="flex-grow"></div>
 
-              <button className="flex flex-col items-center" aria-label="Comment">
-                <MessageCircle size={28} strokeWidth={2.5} className="text-white drop-shadow-md" />
-                <span className="text-white text-xs font-medium mt-1 drop-shadow-md">{post.comments}</span>
-              </button>
+              {/* Bottom content area with safe spacing */}
+              <div className="pb-safe">
+                {showBeautyFilterLabels && post.filter && post.filter.trim() !== "" && (
+                  <div className="mx-6 mb-4 bg-black/60 backdrop-blur-sm px-3 py-1.5 rounded-lg inline-flex items-start max-w-[80%]">
+                    {post.filter.trim().toLowerCase() === "logo" ? (
+                      <div className="flex items-center">
+                        <VisualWarningLogoImage />
+                      </div>
+                    ) : (
+                      <>
+                        {conditionNumber !== "2" && (
+                          <Sparkles size={16} className="text-yellow-400 mr-1.5 flex-shrink-0 mt-0.5" />
+                        )}
+                        <span className="text-white text-sm font-medium break-words">{post.filter}</span>
+                      </>
+                    )}
+                  </div>
+                )}
 
-              <button className="flex flex-col items-center" onClick={() => handleSave(index)} aria-label="Save">
-                <Bookmark
-                  size={28}
-                  strokeWidth={2.5}
-                  className={`${isSaved[index] ? "text-yellow-500 fill-yellow-500" : "text-white"} drop-shadow-md`}
-                />
-                <span className="text-white text-xs font-medium mt-1 drop-shadow-md">
-                  {isSaved[index] ? (post.saves || 0) + 1 : post.saves}
-                </span>
-              </button>
+                {/* User info and caption - positioned higher to avoid browser UI */}
+                <div className="mx-6 mb-12 pr-16">
+                  <div className="text-white font-bold text-lg drop-shadow-md">{post.username}</div>
+                  <p className="text-white text-sm mt-1 drop-shadow-md max-h-20 overflow-y-auto">{post.caption}</p>
+                </div>
 
-              <button className="flex flex-col items-center" onClick={() => handleShare(index)} aria-label="Share">
-                <ArrowUpRight size={28} strokeWidth={2.5} className="text-white drop-shadow-md" />
-                <span className="text-white text-xs font-medium mt-1 drop-shadow-md">{post.shares}</span>
-              </button>
+                {/* Interaction buttons - positioned higher to avoid browser UI */}
+                <div className="absolute z-30 flex flex-col right-6 bottom-12 gap-5">
+                  <button className="flex flex-col items-center" onClick={() => handleLike(index)} aria-label="Like">
+                    <Heart
+                      size={28}
+                      strokeWidth={2.5}
+                      className={`${isLiked[index] ? "text-red-500 fill-red-500" : "text-white"} drop-shadow-md`}
+                    />
+                    <span className="text-white text-xs font-medium mt-1 drop-shadow-md">
+                      {isLiked[index] ? (post.likes || 0) + 1 : post.likes}
+                    </span>
+                  </button>
+
+                  <button className="flex flex-col items-center" aria-label="Comment">
+                    <MessageCircle size={28} strokeWidth={2.5} className="text-white drop-shadow-md" />
+                    <span className="text-white text-xs font-medium mt-1 drop-shadow-md">{post.comments}</span>
+                  </button>
+
+                  <button className="flex flex-col items-center" onClick={() => handleSave(index)} aria-label="Save">
+                    <Bookmark
+                      size={28}
+                      strokeWidth={2.5}
+                      className={`${isSaved[index] ? "text-yellow-500 fill-yellow-500" : "text-white"} drop-shadow-md`}
+                    />
+                    <span className="text-white text-xs font-medium mt-1 drop-shadow-md">
+                      {isSaved[index] ? (post.saves || 0) + 1 : post.saves}
+                    </span>
+                  </button>
+
+                  <button className="flex flex-col items-center" onClick={() => handleShare(index)} aria-label="Share">
+                    <ArrowUpRight size={28} strokeWidth={2.5} className="text-white drop-shadow-md" />
+                    <span className="text-white text-xs font-medium mt-1 drop-shadow-md">{post.shares}</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         ))}
@@ -654,27 +539,6 @@ export default function TikTokFeed() {
           <EndCard />
         </div>
       </div>
-
-      {/* Progress indicator - hide on end card */}
-      {!isShowingEndCard && (
-        <div className="absolute top-6 left-0 right-0 z-10 flex justify-center gap-1">
-          {filteredPosts.map((_, index) => (
-            <div
-              key={index}
-              className={`h-1 rounded-full ${index === currentIndex ? "bg-white w-6" : "bg-white/30 w-4"}`}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Invisible overlay to capture first interaction if needed */}
-      {!userInteracted && (
-        <div
-          className="absolute inset-0 z-40 cursor-pointer"
-          onClick={() => setUserInteracted(true)}
-          aria-hidden="true"
-        />
-      )}
     </div>
   )
 }
