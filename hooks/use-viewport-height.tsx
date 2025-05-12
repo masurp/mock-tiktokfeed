@@ -1,62 +1,32 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect } from "react"
 
 /**
- * Custom hook to get the actual viewport height, accounting for mobile browser toolbars
- * Uses modern viewport units (dvh, svh, lvh) with fallbacks for older browsers
- * @returns An object with CSS variables and utility functions for viewport height
+ * Custom hook to calculate and update the correct viewport height
+ * This addresses the issue with mobile browsers where 100vh includes
+ * the address bar, causing content to be hidden under it
  */
 export function useViewportHeight() {
-  const [viewportHeight, setViewportHeight] = useState<number>(0)
-  const [cssVarValue, setCssVarValue] = useState<string>("100vh")
-
+  // Set up the viewport height calculation
   useEffect(() => {
-    // Function to update the viewport height
-    const updateViewportHeight = () => {
-      // Get the actual viewport height
-      const vh = window.innerHeight
-      setViewportHeight(vh)
-
-      // Check if modern viewport units are supported
-      const supportsModernViewportUnits = CSS.supports("height", "1dvh")
-
-      if (supportsModernViewportUnits) {
-        // Use dynamic viewport height (dvh) which adjusts for mobile browser UI
-        setCssVarValue("100dvh")
-        document.documentElement.style.setProperty("--app-height", "100dvh")
-      } else {
-        // Fallback for browsers that don't support dvh
-        setCssVarValue(`${vh}px`)
-        document.documentElement.style.setProperty("--app-height", `${vh}px`)
-      }
+    // Function to update the CSS variable with the window's inner height
+    const setAppHeight = () => {
+      // Set a CSS variable that represents the actual viewport height
+      document.documentElement.style.setProperty("--app-height", `${window.innerHeight}px`)
     }
 
-    // Initial update
-    updateViewportHeight()
+    // Set the height initially
+    setAppHeight()
 
     // Update on resize and orientation change
-    window.addEventListener("resize", updateViewportHeight)
-    window.addEventListener("orientationchange", updateViewportHeight)
+    window.addEventListener("resize", setAppHeight)
+    window.addEventListener("orientationchange", setAppHeight)
 
-    // Clean up
+    // Clean up event listeners
     return () => {
-      window.removeEventListener("resize", updateViewportHeight)
-      window.removeEventListener("orientationchange", updateViewportHeight)
+      window.removeEventListener("resize", setAppHeight)
+      window.removeEventListener("orientationchange", setAppHeight)
     }
   }, [])
-
-  return {
-    viewportHeight,
-    cssVarValue,
-    // Helper function to get percentage of viewport height
-    getViewportHeightPercentage: (percentage: number) => {
-      if (cssVarValue === "100dvh") {
-        return `${percentage}dvh`
-      } else if (viewportHeight > 0) {
-        return `${viewportHeight * (percentage / 100)}px`
-      }
-      return `${percentage}vh` // Fallback
-    },
-  }
 }
