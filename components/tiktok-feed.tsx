@@ -57,6 +57,8 @@ export default function TikTokFeed() {
   const [trackingInitialized, setTrackingInitialized] = useState(false)
   // Track if user has interacted with the page
   const [userInteracted, setUserInteracted] = useState(false)
+  // Global muted state to persist across videos
+  const [globalMuted, setGlobalMuted] = useState(true)
 
   // Use our custom hook to handle viewport height
   const { getViewportHeightPercentage } = useViewportHeight()
@@ -538,9 +540,12 @@ export default function TikTokFeed() {
     >
       {/* Header with search icon only - hide on end card */}
       {!isShowingEndCard && (
-        <div className="absolute top-0 right-0 z-10 p-6">
-          <button className="text-white p-2" onClick={() => setUserInteracted(true)}>
-            <Search size={24} />
+        <div className="absolute top-16 right-6 z-10">
+          <button
+            className="text-white p-2 bg-black/60 backdrop-blur-sm rounded-full"
+            onClick={() => setUserInteracted(true)}
+          >
+            <Search size={20} />
           </button>
         </div>
       )}
@@ -591,6 +596,9 @@ export default function TikTokFeed() {
               username={post.username}
               caption={post.caption}
               isActive={index === currentIndex}
+              isMuted={globalMuted}
+              onMuteChange={setGlobalMuted}
+              userInteracted={userInteracted}
             />
 
             {/* Heart animation when liking a video */}

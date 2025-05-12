@@ -12,41 +12,29 @@ interface MediaPostProps {
   username: string
   caption: string
   isActive: boolean
+  isMuted: boolean
+  onMuteChange: (muted: boolean) => void
+  userInteracted: boolean
 }
 
-export default function MediaPost({ mediaUrl, mediaType, username, caption, isActive }: MediaPostProps) {
+export default function MediaPost({
+  mediaUrl,
+  mediaType,
+  username,
+  caption,
+  isActive,
+  isMuted,
+  onMuteChange,
+  userInteracted,
+}: MediaPostProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [isMuted, setIsMuted] = useState(false)
   // Add a ref to track the play promise
   const playPromiseRef = useRef<Promise<void> | null>(null)
-  // Track if user has interacted with the page
-  const [userInteracted, setUserInteracted] = useState(false)
   // Track retry attempts
   const [retryCount, setRetryCount] = useState(0)
   const maxRetries = 3
-
-  // Listen for any user interaction with the page
-  useEffect(() => {
-    const handleUserInteraction = () => {
-      setUserInteracted(true)
-      // Remove listeners after first interaction
-      document.removeEventListener("click", handleUserInteraction)
-      document.removeEventListener("touchstart", handleUserInteraction)
-      document.removeEventListener("keydown", handleUserInteraction)
-    }
-
-    document.addEventListener("click", handleUserInteraction)
-    document.addEventListener("touchstart", handleUserInteraction)
-    document.addEventListener("keydown", handleUserInteraction)
-
-    return () => {
-      document.removeEventListener("click", handleUserInteraction)
-      document.removeEventListener("touchstart", handleUserInteraction)
-      document.removeEventListener("keydown", handleUserInteraction)
-    }
-  }, [])
 
   // Function to safely play video with retries and fallbacks
   const playVideo = async () => {
@@ -102,6 +90,7 @@ export default function MediaPost({ mediaUrl, mediaType, username, caption, isAc
             if (videoRef.current && isActive) {
               // Force mute for retry (better autoplay success rate)
               videoRef.current.muted = true
+              onMuteChange(true) // Update parent state to match
 
               // Try a different approach on later retries
               if (retryCount >= 2 && videoRef.current) {
@@ -159,20 +148,27 @@ export default function MediaPost({ mediaUrl, mediaType, username, caption, isAc
         // Delay play attempt slightly to ensure DOM is ready
         const playTimer = setTimeout(() => {
           if (videoRef.current) {
-            // Force muted state for initial play attempt (mobile browsers require this)
-            const originalMuted = videoRef.current.muted
+            // Always start with muted for autoplay compatibility
             videoRef.current.muted = true
 
             // Attempt to play
             playVideo()
               .then(() => {
-                // If user has interacted and video wasn't supposed to be muted, unmute it
+                // If user has interacted and video is supposed to be unmuted, try to unmute it
                 if (userInteracted && !isMuted && videoRef.current) {
-                  videoRef.current.muted = originalMuted
+                  videoRef.current.muted = false
+                } else if (videoRef.current.muted !== isMuted) {
+                  // Otherwise ensure video muted state matches the expected state
+                  videoRef.current.muted = isMuted
                 }
               })
               .catch((error) => {
                 console.error("Initial play failed:", error)
+                // If play fails, ensure we're in muted state
+                if (videoRef.current) {
+                  videoRef.current.muted = true
+                  onMuteChange(true)
+                }
               })
           }
         }, 100)
@@ -182,7 +178,7 @@ export default function MediaPost({ mediaUrl, mediaType, username, caption, isAc
         pauseVideo()
       }
     }
-  }, [isActive, mediaType, userInteracted, isMuted])
+  }, [isActive, mediaType, userInteracted, isMuted, onMuteChange])
 
   // Preload videos for smoother experience
   useEffect(() => {
@@ -206,29 +202,35 @@ export default function MediaPost({ mediaUrl, mediaType, username, caption, isAc
 
   const toggleSound = (e: React.MouseEvent) => {
     e.stopPropagation()
-    setIsMuted(!isMuted)
 
-    // If we're unmuting and the video is active, ensure it's playing
-    if (isMuted && isActive && videoRef.current) {
-      // Don't try to play if there's already a play promise pending
-      if (!playPromiseRef.current) {
-        videoRef.current.muted = false
-        videoRef.current.play().catch((err) => {
-          console.error("Could not play video with sound:", err)
-          // If autoplay with sound fails, keep it muted
-          videoRef.current!.muted = true
-        })
-      } else {
-        // If there's a pending play promise, just update the muted state
-        videoRef.current.muted = false
+    // Get the new desired muted state (opposite of current)
+    const newMutedState = !isMuted
+
+    // Update parent state
+    onMuteChange(newMutedState)
+
+    // Update video element if it exists
+    if (videoRef.current) {
+      videoRef.current.muted = newMutedState
+
+      // If we're unmuting and the video is active, ensure it's playing
+      if (!newMutedState && isActive) {
+        // Don't try to play if there's already a play promise pending
+        if (!playPromiseRef.current) {
+          videoRef.current.play().catch((err) => {
+            console.error("Could not play video with sound:", err)
+            // If autoplay with sound fails, revert to muted state
+            if (videoRef.current) {
+              videoRef.current.muted = true
+              onMuteChange(true) // Update parent state to match
+            }
+          })
+        }
       }
-    } else if (videoRef.current) {
-      videoRef.current.muted = true
     }
   }
 
   const handleRetry = () => {
-    setUserInteracted(true) // Mark that user has interacted
     setRetryCount(0) // Reset retry count
     setError(null)
     if (videoRef.current && !playPromiseRef.current) {
@@ -263,6 +265,13 @@ export default function MediaPost({ mediaUrl, mediaType, username, caption, isAc
     }
   }, [isActive, mediaType])
 
+  // Update video muted state when isMuted prop changes
+  useEffect(() => {
+    if (mediaType === "video" && videoRef.current) {
+      videoRef.current.muted = isMuted
+    }
+  }, [isMuted, mediaType])
+
   return (
     <div className="relative h-full w-full bg-black">
       {mediaType === "video" ? (
@@ -279,12 +288,6 @@ export default function MediaPost({ mediaUrl, mediaType, username, caption, isAc
             onError={handleError}
             // Add poster for better perceived performance
             poster={mediaUrl + "?poster=true"}
-            onTouchStart={() => {
-              setUserInteracted(true)
-              if (isActive && videoRef.current && !playPromiseRef.current) {
-                playVideo().catch((err) => console.error("Touch play failed:", err))
-              }
-            }}
           />
           {isLoading && isActive && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/50">
@@ -323,15 +326,6 @@ export default function MediaPost({ mediaUrl, mediaType, username, caption, isAc
         </div>
       )}
 
-      {/* Invisible overlay to capture first interaction */}
-      {!userInteracted && (
-        <div
-          className="absolute inset-0 z-40 cursor-pointer"
-          onClick={() => setUserInteracted(true)}
-          aria-hidden="true"
-        />
-      )}
-
       {/* Media overlay gradient */}
       <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/70" />
 
@@ -345,7 +339,7 @@ export default function MediaPost({ mediaUrl, mediaType, username, caption, isAc
       {mediaType === "video" && (
         <button
           onClick={toggleSound}
-          className="absolute top-6 left-6 z-20 bg-black/60 backdrop-blur-sm p-2 rounded-full"
+          className="absolute top-16 left-6 z-20 bg-black/60 backdrop-blur-sm p-2 rounded-full"
           aria-label={isMuted ? "Unmute" : "Mute"}
         >
           {isMuted ? <VolumeX size={20} className="text-white" /> : <Volume2 size={20} className="text-white" />}
