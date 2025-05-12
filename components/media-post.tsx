@@ -1,8 +1,10 @@
 "use client"
 
+import type React from "react"
+
 import { useRef, useEffect, useState } from "react"
 import Image from "next/image"
-import { Loader2 } from "lucide-react"
+import { Loader2, Volume2, VolumeX } from "lucide-react"
 
 interface MediaPostProps {
   mediaUrl: string
@@ -16,6 +18,7 @@ export default function MediaPost({ mediaUrl, mediaType, username, caption, isAc
   const videoRef = useRef<HTMLVideoElement>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [isMuted, setIsMuted] = useState(false)
 
   useEffect(() => {
     if (mediaType === "video" && videoRef.current) {
@@ -68,16 +71,30 @@ export default function MediaPost({ mediaUrl, mediaType, username, caption, isAc
     setError("Failed to load media")
   }
 
+  const toggleSound = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setIsMuted(!isMuted)
+
+    // If we're unmuting and the video is active, ensure it's playing
+    if (isMuted && isActive && videoRef.current) {
+      videoRef.current.play().catch((err) => {
+        console.error("Could not play video with sound:", err)
+        // If autoplay with sound fails, keep it muted
+        setIsMuted(true)
+      })
+    }
+  }
+
   return (
-    <div className="absolute inset-0 bg-black">
+    <div className="relative h-full w-full bg-black">
       {mediaType === "video" ? (
         <>
           <video
             ref={videoRef}
             src={mediaUrl}
-            className="absolute inset-0 w-full h-full object-cover"
+            className="h-full w-full object-cover"
             loop
-            muted
+            muted={isMuted}
             playsInline
             autoPlay={isActive}
             preload="auto"
@@ -91,7 +108,7 @@ export default function MediaPost({ mediaUrl, mediaType, username, caption, isAc
           )}
         </>
       ) : (
-        <div className="absolute inset-0">
+        <div className="h-full w-full relative">
           <Image
             src={mediaUrl || "/placeholder.svg"}
             alt={caption}
@@ -129,6 +146,23 @@ export default function MediaPost({ mediaUrl, mediaType, username, caption, isAc
 
       {/* Media overlay gradient */}
       <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/70" />
+
+      {/* User info and caption - moved closer to the bottom */}
+      <div className="absolute bottom-6 left-6 right-16 z-10">
+        <div className="text-white font-bold text-lg drop-shadow-md">{username}</div>
+        <p className="text-white text-sm mt-1 drop-shadow-md">{caption}</p>
+      </div>
+
+      {/* Sound control button - only for videos */}
+      {mediaType === "video" && (
+        <button
+          onClick={toggleSound}
+          className="absolute top-6 left-6 z-20 bg-black/60 backdrop-blur-sm p-2 rounded-full"
+          aria-label={isMuted ? "Unmute" : "Mute"}
+        >
+          {isMuted ? <VolumeX size={20} className="text-white" /> : <Volume2 size={20} className="text-white" />}
+        </button>
+      )}
     </div>
   )
 }

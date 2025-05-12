@@ -17,7 +17,7 @@ export default function EndCard() {
   }
 
   return (
-    <div className="absolute inset-0 bg-black flex flex-col items-center justify-center text-center p-6">
+    <div className="relative h-full w-full bg-black flex flex-col items-center justify-center text-center p-6">
       <div className="bg-black/60 backdrop-blur-sm p-8 rounded-xl max-w-md">
         <h2 className="text-white text-2xl font-bold mb-6">You have seen all posts, you can close this app now</h2>
         <Button
