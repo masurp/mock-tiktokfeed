@@ -53,6 +53,10 @@ export default function TikTokFeed() {
   const isMobile = useMobile()
   // Add sound initialization on first user interaction to handle autoplay restrictions
   const [soundInitialized, setSoundInitialized] = useState(false)
+  // Add state to track if tracking is initialized
+  const [trackingInitialized, setTrackingInitialized] = useState(false)
+  // Track if user has interacted with the page
+  const [userInteracted, setUserInteracted] = useState(false)
 
   // Use our custom hook to handle viewport height
   const { getViewportHeightPercentage } = useViewportHeight()
@@ -62,7 +66,37 @@ export default function TikTokFeed() {
 
   // Initialize tracking system
   useEffect(() => {
-    initTracking()
+    try {
+      if (!trackingInitialized) {
+        initTracking()
+        setTrackingInitialized(true)
+        console.log("Tracking system initialized successfully")
+      }
+    } catch (error) {
+      console.error("Failed to initialize tracking system:", error)
+    }
+  }, [trackingInitialized])
+
+  // Listen for any user interaction with the page
+  useEffect(() => {
+    const handleUserInteraction = () => {
+      setUserInteracted(true)
+      setSoundInitialized(true)
+      // Remove listeners after first interaction
+      document.removeEventListener("click", handleUserInteraction)
+      document.removeEventListener("touchstart", handleUserInteraction)
+      document.removeEventListener("keydown", handleUserInteraction)
+    }
+
+    document.addEventListener("click", handleUserInteraction)
+    document.addEventListener("touchstart", handleUserInteraction)
+    document.addEventListener("keydown", handleUserInteraction)
+
+    return () => {
+      document.removeEventListener("click", handleUserInteraction)
+      document.removeEventListener("touchstart", handleUserInteraction)
+      document.removeEventListener("keydown", handleUserInteraction)
+    }
   }, [])
 
   // Fisher-Yates shuffle algorithm for randomizing array order
@@ -144,13 +178,18 @@ export default function TikTokFeed() {
       setIsSaved(Array(randomizedPosts.length).fill(false))
 
       // Track app_open event
-      trackEvent({
-        event: "app_open",
-        userId: idParam,
-        postId: 0,
-        postOwner: "",
-        timestamp: Date.now(),
-      })
+      try {
+        trackEvent({
+          event: "app_open",
+          userId: idParam,
+          postId: 0,
+          postOwner: "",
+          timestamp: Date.now(),
+          value: { condition: condParam },
+        })
+      } catch (error) {
+        console.error("Failed to track app_open event:", error)
+      }
     }
   }
 
@@ -220,13 +259,18 @@ export default function TikTokFeed() {
       }
 
       // Track feed completion event
-      trackEvent({
-        event: "feed_completed",
-        userId,
-        postId: 0,
-        postOwner: "",
-        timestamp: Date.now(),
-      })
+      try {
+        trackEvent({
+          event: "feed_completed",
+          userId,
+          postId: 0,
+          postOwner: "",
+          timestamp: Date.now(),
+          value: { condition: conditionValue },
+        })
+      } catch (error) {
+        console.error("Failed to track feed_completed event:", error)
+      }
 
       // Move to the end card
       setCurrentIndex(currentIndex + 1)
@@ -256,20 +300,27 @@ export default function TikTokFeed() {
   }
 
   const handleLike = (index: number) => {
+    setUserInteracted(true) // Mark that user has interacted
+
     const newLiked = [...isLiked]
     const wasLiked = newLiked[index]
     newLiked[index] = !wasLiked
     setIsLiked(newLiked)
 
     // Track like/unlike event
-    const post = filteredPosts[index]
-    trackEvent({
-      event: wasLiked ? "unlike_post" : "like_post",
-      userId,
-      postId: post.id,
-      postOwner: post.username,
-      timestamp: Date.now(),
-    })
+    try {
+      const post = filteredPosts[index]
+      trackEvent({
+        event: wasLiked ? "unlike_post" : "like_post",
+        userId,
+        postId: post.id,
+        postOwner: post.username,
+        timestamp: Date.now(),
+        value: { condition: conditionValue },
+      })
+    } catch (error) {
+      console.error("Failed to track like/unlike event:", error)
+    }
 
     // Only show heart animation when liking (not unliking)
     if (!wasLiked) {
@@ -281,39 +332,45 @@ export default function TikTokFeed() {
   }
 
   const handleSave = (index: number) => {
+    setUserInteracted(true) // Mark that user has interacted
+
     const newSaved = [...isSaved]
     const wasSaved = newSaved[index]
     newSaved[index] = !wasSaved
     setIsSaved(newSaved)
 
     // Track save/unsave event
-    const post = filteredPosts[index]
-    trackEvent({
-      event: wasSaved ? "unsave_post" : "save_post",
-      userId,
-      postId: post.id,
-      postOwner: post.username,
-      timestamp: Date.now(),
-    })
+    try {
+      const post = filteredPosts[index]
+      trackEvent({
+        event: wasSaved ? "unsave_post" : "save_post",
+        userId,
+        postId: post.id,
+        postOwner: post.username,
+        timestamp: Date.now(),
+        value: { condition: conditionValue },
+      })
+    } catch (error) {
+      console.error("Failed to track save/unsave event:", error)
+    }
   }
 
   const handleShare = (index: number) => {
-    // Track share event
-    const post = filteredPosts[index]
-    trackEvent({
-      event: "share_post",
-      userId,
-      postId: post.id,
-      postOwner: post.username,
-      timestamp: Date.now(),
-    })
-  }
+    setUserInteracted(true) // Mark that user has interacted
 
-  // Add a function to initialize sound after the handleShare function:
-  const initializeSound = () => {
-    if (!soundInitialized) {
-      setSoundInitialized(true)
-      console.log("Sound initialized after user interaction")
+    // Track share event
+    try {
+      const post = filteredPosts[index]
+      trackEvent({
+        event: "share_post",
+        userId,
+        postId: post.id,
+        postOwner: post.username,
+        timestamp: Date.now(),
+        value: { condition: conditionValue },
+      })
+    } catch (error) {
+      console.error("Failed to track share event:", error)
     }
   }
 
@@ -326,46 +383,56 @@ export default function TikTokFeed() {
       // End previous tracking if exists
       if (viewTrackingCleanupRef.current) {
         viewTrackingCleanupRef.current()
+        viewTrackingCleanupRef.current = null
       }
 
       // Start new tracking
-      viewTrackingCleanupRef.current = startViewTracking(userId, post.id, post.username)
+      try {
+        viewTrackingCleanupRef.current = startViewTracking(userId, post.id, post.username)
+      } catch (error) {
+        console.error("Failed to start view tracking:", error)
+        viewTrackingCleanupRef.current = null
+      }
     }
 
     // Clean up on unmount
     return () => {
       if (viewTrackingCleanupRef.current) {
-        viewTrackingCleanupRef.current()
+        try {
+          viewTrackingCleanupRef.current()
+        } catch (error) {
+          console.error("Error during view tracking cleanup:", error)
+        }
+        viewTrackingCleanupRef.current = null
       }
     }
   }, [currentIndex, filteredPosts, userId])
 
-  // Initialize sound on first user interaction
+  // Add this after the other useEffect hooks
   useEffect(() => {
-    if (!soundInitialized) {
-      const handleUserInteraction = () => {
-        initializeSound()
-        // Remove event listeners after first interaction
-        document.removeEventListener("click", handleUserInteraction)
-        document.removeEventListener("touchstart", handleUserInteraction)
-        document.removeEventListener("keydown", handleUserInteraction)
-      }
+    // When current index changes, ensure the video plays after a short delay
+    if (filteredPosts.length > 0 && currentIndex >= 0 && currentIndex < filteredPosts.length) {
+      // Small delay to ensure the DOM has updated
+      const timer = setTimeout(() => {
+        // Force a resize event to help mobile browsers recalculate dimensions
+        window.dispatchEvent(new Event("resize"))
 
-      document.addEventListener("click", handleUserInteraction)
-      document.addEventListener("touchstart", handleUserInteraction)
-      document.addEventListener("keydown", handleUserInteraction)
+        // Force a scroll event to help trigger visibility detection
+        window.dispatchEvent(new Event("scroll"))
 
-      return () => {
-        document.removeEventListener("click", handleUserInteraction)
-        document.removeEventListener("touchstart", handleUserInteraction)
-        document.removeEventListener("keydown", handleUserInteraction)
-      }
+        // Mark user as interacted to help with autoplay
+        setUserInteracted(true)
+      }, 150)
+
+      return () => clearTimeout(timer)
     }
-  }, [soundInitialized])
+  }, [currentIndex, filteredPosts.length])
 
   // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      setUserInteracted(true) // Mark that user has interacted
+
       if (e.key === "ArrowUp") {
         setTimeout(() => goToPrevious(), 50)
       } else if (e.key === "ArrowDown") {
@@ -379,17 +446,29 @@ export default function TikTokFeed() {
     }
   }, [currentIndex, filteredPosts.length])
 
-  // Swipe handlers
+  // Update the swipe handlers
   const swipeHandlers = useSwipeable({
     onSwipedUp: () => {
-      initializeSound()
+      setUserInteracted(true) // Mark that user has interacted
       // Add a small delay to prevent rapid transitions
-      setTimeout(() => goToNext(), 50)
+      setTimeout(() => {
+        goToNext()
+        // Force a scroll event after navigation
+        setTimeout(() => {
+          window.dispatchEvent(new Event("scroll"))
+        }, 100)
+      }, 50)
     },
     onSwipedDown: () => {
-      initializeSound()
+      setUserInteracted(true) // Mark that user has interacted
       // Add a small delay to prevent rapid transitions
-      setTimeout(() => goToPrevious(), 50)
+      setTimeout(() => {
+        goToPrevious()
+        // Force a scroll event after navigation
+        setTimeout(() => {
+          window.dispatchEvent(new Event("scroll"))
+        }, 100)
+      }, 50)
     },
     preventDefaultTouchmoveEvent: true,
     trackMouse: true,
@@ -451,11 +530,16 @@ export default function TikTokFeed() {
         // Fallback inline style for browsers that don't support CSS variables
         height: isMobile ? "var(--app-height)" : "80vh",
       }}
+      onClick={() => {
+        setUserInteracted(true)
+        // Force a scroll event to help trigger visibility detection
+        window.dispatchEvent(new Event("scroll"))
+      }}
     >
       {/* Header with search icon only - hide on end card */}
       {!isShowingEndCard && (
         <div className="absolute top-0 right-0 z-10 p-6">
-          <button className="text-white p-2">
+          <button className="text-white p-2" onClick={() => setUserInteracted(true)}>
             <Search size={24} />
           </button>
         </div>
@@ -464,7 +548,7 @@ export default function TikTokFeed() {
       {/* Navigation arrows for desktop - adjust for end card */}
       <button
         onClick={() => {
-          initializeSound()
+          setUserInteracted(true)
           // Add a small delay to prevent rapid transitions
           setTimeout(() => goToPrevious(), 50)
         }}
@@ -475,7 +559,7 @@ export default function TikTokFeed() {
       </button>
       <button
         onClick={() => {
-          initializeSound()
+          setUserInteracted(true)
           // Add a small delay to prevent rapid transitions
           setTimeout(() => goToNext(), 50)
         }}
@@ -496,7 +580,11 @@ export default function TikTokFeed() {
       >
         {/* Regular posts */}
         {filteredPosts.map((post, index) => (
-          <div key={post.id} className="h-full w-full flex-shrink-0 relative">
+          <div
+            key={post.id}
+            className="h-full w-full flex-shrink-0 relative"
+            onClick={() => setUserInteracted(true)} // Mark user interaction on post click
+          >
             <MediaPost
               mediaUrl={post.mediaUrl}
               mediaType={post.mediaType}
@@ -569,6 +657,15 @@ export default function TikTokFeed() {
             />
           ))}
         </div>
+      )}
+
+      {/* Invisible overlay to capture first interaction if needed */}
+      {!userInteracted && (
+        <div
+          className="absolute inset-0 z-40 cursor-pointer"
+          onClick={() => setUserInteracted(true)}
+          aria-hidden="true"
+        />
       )}
     </div>
   )
