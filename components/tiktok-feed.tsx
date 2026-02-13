@@ -17,7 +17,7 @@ import MediaPost from "./media-post"
 import EndCard from "./end-card"
 import HeartAnimation from "./heart-animation"
 import VisualWarningLogoImage from "./visual-warning-logo-image"
-import { useMobile } from "@/hooks/use-mobile"
+import { useIsMobile } from "@/hooks/use-mobile"
 import { useViewportHeight } from "@/hooks/use-viewport-height"
 import { initTracking, trackEvent, startViewTracking } from "@/utils/tracking"
 
@@ -54,7 +54,7 @@ export default function TikTokFeed() {
   const [conditionValue, setConditionValue] = useState<string>("unknown")
   const [userId, setUserId] = useState<string>("unknown")
   const containerRef = useRef<HTMLDivElement>(null)
-  const isMobile = useMobile()
+  const isMobile = useIsMobile()
 
   // Ref to store the cleanup function for view tracking
   const viewTrackingCleanupRef = useRef<(() => void) | null>(null)
